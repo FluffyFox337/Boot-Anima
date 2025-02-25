@@ -1,2 +1,1 @@
-# Boot-Anima
-Custom bootanimation
+This is the custom boot animation.
