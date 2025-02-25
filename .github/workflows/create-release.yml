@@ -12,12 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main branch
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4.2.2
         with:
           ref: main
 
       - name: Checkout update branch
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4.2.2
         with:
           ref: update
           path: update_branch
@@ -49,12 +49,12 @@ jobs:
     needs: update_module_prop
     steps:
       - name: Checkout main branch
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4.2.2
         with:
           ref: main
 
       - name: Checkout update branch
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4.2.2
         with:
           ref: update
           path: update_branch
@@ -73,7 +73,7 @@ jobs:
           zip -r Boot-Anima.zip . -x "*.github/workflows/*"
 
       - name: Create release with tag "latest"
-        uses: ghcr.io/softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2.2.1
         with:
           files: Boot-Anima.zip
           tag: latest
