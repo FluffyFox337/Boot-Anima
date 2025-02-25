@@ -13,18 +13,18 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Set up Git
-      uses: actions/setup-git@v2
-
     - name: Create ZIP archive
       run: |
         zip -r Boot-anima.zip ./*
 
+    - name: Set up Git
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
     - name: Create and push a new tag
       run: |
         TAG_NAME="latest"
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
         git tag $TAG_NAME
         git push origin $TAG_NAME
       env:
