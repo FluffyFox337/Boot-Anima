@@ -1,68 +1,59 @@
-name: Update Release
+name: Update Release with Latest Tag
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Позволяет запускать этот workflow вручную
 
 jobs:
   update-release:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout the repository
+      # Клонируем репозиторий
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          ref: main
 
-      - name: Checkout 'update' branch
-        uses: actions/checkout@v4
-        with:
-          ref: update
-          path: update
+      # Устанавливаем zip
+      - name: Install zip
+        run: sudo apt-get install -y zip
 
-      - name: Read version from update.json
-        id: version
+      # Создаем архив, исключая папку .github/workflows
+      - name: Create Boot-Anima.zip
         run: |
-          VERSION=$(jq -r .version update/update.json)
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          zip -r Boot-Anima.zip . -x "*.github/workflows/*"
+      # Получаем токен для доступа к API GitHub
+      - name: Get GitHub token
+        id: token
+        run: echo "::set-output name=token::${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Read changelog from build.md
-        id: changelog
+      # Получаем список релизов и обновляем существующий с тегом 'latest'
+      - name: Update existing release with 'latest' tag
         run: |
-          CHANGELOG=$(cat update/build.md)
-          echo "CHANGELOG=$CHANGELOG" >> $GITHUB_ENV
-
-      - name: Create a zip archive
-        run: |
-          mkdir temp_dir
-          rsync -av --exclude '.github' --exclude '.git' ./ temp_dir/
-          zip -r Boot-Anima.zip temp_dir/*
-          rm -rf temp_dir
-
-      - name: Check if 'latest' tag exists
-        run: |
-          git fetch --tags
-          if git rev-parse "refs/tags/latest" >/dev/null 2>&1; then
-            echo "Tag 'latest' exists."
-          else
-            echo "Tag 'latest' does not exist. Creating it."
-            git tag latest
-            git push origin latest
+          RELEASE_ID=$(curl -s \
+            -H "Authorization: token ${{ steps.token.outputs.token }}" \
+            https://api.github.com/repos/${{ github.repository }}/releases/tags/latest \
+            | jq -r .id)
+          if [ "$RELEASE_ID" != "null" ]; then
+            curl -X DELETE \
+              -H "Authorization: token ${{ steps.token.outputs.token }}" \
+              https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID
           fi
-
-      - name: Upload the release zip
-        uses: actions/upload-artifact@v4
-        with:
-          name: Boot-Anima.zip
-          path: Boot-Anima.zip
-
-      - name: Create or update the release with 'latest' tag
-        uses: softprops/action-gh-release@v1
-        with:
-          files: Boot-Anima.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set release name and description
-        run: |
-          RELEASE_ID=$(gh release view latest --json id -q '.id')
-          gh release edit $RELEASE_ID --title "$VERSION" --body "$CHANGELOG"
+          # Создаем новый релиз с тегом 'latest' и прикрепляем архив
+          curl -X POST \
+            -H "Authorization: token ${{ steps.token.outputs.token }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "tag_name": "latest",
+              "name": "Latest Release",
+              "body": "Updated release with new Boot-Anima.zip.",
+              "draft": false,
+              "prerelease": false
+            }' https://api.github.com/repos/${{ github.repository }}/releases
+          # Загружаем архив в релиз
+          curl -X POST \
+            -H "Authorization: token ${{ steps.token.outputs.token }}" \
+            -H "Content-Type: application/zip" \
+            --data-binary @Boot-Anima.zip \
+            "https://uploads.github.com/repos/${{ github.repository }}/releases/$(curl -s \
+              -H 'Authorization: token ${{ steps.token.outputs.token }}' \
+              https://api.github.com/repos/${{ github.repository }}/releases/tags/latest \
+              | jq -r .id)/assets?name=Boot-Anima.zip"
