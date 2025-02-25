@@ -21,7 +21,7 @@ jobs:
       - name: Set up versioning and changelog
         id: setup
         run: |
-          VERSION=$(jq -r .version ./update/update.json)
+          VERSION=$(jq -r .version ./update.json)
           CHANGELOG=$(curl -s https://raw.githubusercontent.com/FluffyFox337/Boot-Anima/refs/heads/update/build.md)
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "CHANGELOG=$CHANGELOG" >> $GITHUB_ENV
