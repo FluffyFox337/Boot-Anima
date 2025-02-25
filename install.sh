@@ -73,3 +73,4 @@ success() {
 ui_print ""
 ui_print "✓ Boot animation has been set successfully! "
 }
+
