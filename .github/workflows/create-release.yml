@@ -38,6 +38,17 @@ jobs:
           zip -r Boot-Anima.zip temp_dir/*
           rm -rf temp_dir
 
+      - name: Check if 'latest' tag exists
+        run: |
+          git fetch --tags
+          if git rev-parse "refs/tags/latest" >/dev/null 2>&1; then
+            echo "Tag 'latest' exists."
+          else
+            echo "Tag 'latest' does not exist. Creating it."
+            git tag latest
+            git push origin latest
+          fi
+
       - name: Upload the release zip
         uses: actions/upload-artifact@v4
         with:
