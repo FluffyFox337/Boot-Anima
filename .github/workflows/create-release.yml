@@ -1,11 +1,8 @@
 name: Update Release with Latest Tag
 
 on:
-  push:
-    branches:
-      - main  # Работает при изменениях в ветке 'main'
-      - update # Работает при изменениях в ветке 'update'
-  workflow_dispatch:  # Позволяет запускать этот workflow вручную
+   push:
+        branches: [ main , update ]
 
 jobs:
   update-release:
