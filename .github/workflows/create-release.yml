@@ -18,11 +18,11 @@ jobs:
     name: Update module.prop
     if: needs.check_recent_commit.outputs.should_run == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           ref: main
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           ref: update
           path: update_branch
@@ -37,11 +37,8 @@ jobs:
 
       - name: Update module.prop file
         run: |
-          sed -i "s/^version=.*$/version=$VERSION/" module.prop
-          sed -i "s/^versionCode=.*$/versionCode=$VERSION_CODE/" module.prop
-        env:
-          VERSION: ${{ env.VERSION }}
-          VERSION_CODE: ${{ env.VERSION_CODE }}
+          sed -i "s/^version=.*$/version=${{ env.VERSION }}/" module.prop
+          sed -i "s/^versionCode=.*$/versionCode=${{ env.VERSION_CODE }}/" module.prop
 
       - name: Commit changes to module.prop
         run: |
@@ -54,11 +51,11 @@ jobs:
     needs: update_module_prop
     if: needs.check_recent_commit.outputs.should_run == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           ref: main
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           ref: update
           path: update_branch
@@ -93,7 +90,7 @@ jobs:
       
             const release = releases.data.find(release => release.tag_name === tag);
       
-            // Check if the release exists and delete it
+            // Delete release and tag if found
             if (release) {
               await github.rest.repos.deleteRelease({
                 owner: owner,
@@ -105,7 +102,7 @@ jobs:
               console.log("No existing release to delete");
             }
       
-            // Delete the tag
+            // Try to delete the tag
             try {
               await github.rest.git.deleteRef({
                 owner: owner,
