@@ -6,83 +6,52 @@ on:
 jobs:
   update-release:
     runs-on: ubuntu-latest
+
     steps:
-      # Checkout the repository with both 'main' and 'update' branches
-      - name: Checkout repository
+      - name: Checkout the repository
         uses: actions/checkout@v4
         with:
           ref: main
 
-      # Fetch update branch to access 'update.json' and 'build.md'
-      - name: Checkout update branch
-        run: git fetch origin update:refs/remotes/origin/update
+      - name: Checkout 'update' branch
+        uses: actions/checkout@v4
+        with:
+          ref: update
+          path: update
 
-      # Set up the environment for versioning and changelog
-      - name: Set up versioning and changelog
-        id: setup
+      - name: Read version from update.json
+        id: version
         run: |
-          VERSION=$(jq -r .version ./update.json)
-          CHANGELOG=$(curl -s https://raw.githubusercontent.com/FluffyFox337/Boot-Anima/refs/heads/update/build.md)
+          VERSION=$(jq -r .version update/update.json)
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Read changelog from build.md
+        id: changelog
+        run: |
+          CHANGELOG=$(cat update/build.md)
           echo "CHANGELOG=$CHANGELOG" >> $GITHUB_ENV
 
-      # Create a ZIP archive excluding .github and .git
-      - name: Create ZIP Archive
+      - name: Create a zip archive
         run: |
-          mkdir -p archive
-          rsync -av --exclude='.github' --exclude='.git' ./ archive/
-          zip -r Boot-Anima.zip archive/*
+          mkdir temp_dir
+          rsync -av --exclude '.github' --exclude '.git' ./ temp_dir/
+          zip -r Boot-Anima.zip temp_dir/*
+          rm -rf temp_dir
 
-      # Upload the ZIP file as an artifact
-      - name: Upload ZIP Artifact
+      - name: Upload the release zip
         uses: actions/upload-artifact@v4
         with:
           name: Boot-Anima.zip
           path: Boot-Anima.zip
 
-      # Create/Update the release with tag "latest"
-      - name: Create or Update Release
+      - name: Create or update the release with 'latest' tag
+        uses: softprops/action-gh-release@v1
+        with:
+          files: Boot-Anima.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set release name and description
         run: |
-          RELEASE_TAG="latest"
-          RELEASE_NAME="${{ env.VERSION }}"
-          RELEASE_BODY="${{ env.CHANGELOG }}"
-
-          # Check if the release already exists
-          RELEASE_ID=$(curl -s \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            "https://api.github.com/repos/FluffyFox337/Boot-Anima/releases/tags/$RELEASE_TAG" | jq -r .id)
-
-          # If release exists, update it
-          if [ "$RELEASE_ID" != "null" ]; then
-            echo "Updating existing release with tag 'latest'"
-            curl -X PATCH \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -d "{\"name\":\"$RELEASE_NAME\", \"body\":\"$RELEASE_BODY\", \"tag_name\":\"$RELEASE_TAG\", \"draft\":false, \"prerelease\":false}" \
-              "https://api.github.com/repos/FluffyFox337/Boot-Anima/releases/$RELEASE_ID"
-
-            # Upload new asset to the release
-            curl -X POST \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Content-Type: application/zip" \
-              --data-binary @Boot-Anima.zip \
-              "https://uploads.github.com/repos/FluffyFox337/Boot-Anima/releases/$RELEASE_ID/assets?name=Boot-Anima.zip"
-          else
-            # If release does not exist, create a new one
-            echo "Creating new release with tag 'latest'"
-            RESPONSE=$(curl -X POST \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -d "{\"tag_name\":\"$RELEASE_TAG\", \"name\":\"$RELEASE_NAME\", \"body\":\"$RELEASE_BODY\", \"draft\":false, \"prerelease\":false}" \
-              "https://api.github.com/repos/FluffyFox337/Boot-Anima/releases")
-
-            # Extract release ID from response
-            RELEASE_ID=$(echo $RESPONSE | jq -r .id)
-
-            # Upload asset to the newly created release
-            curl -X POST \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Content-Type: application/zip" \
-              --data-binary @Boot-Anima.zip \
-              "https://uploads.github.com/repos/FluffyFox337/Boot-Anima/releases/$RELEASE_ID/assets?name=Boot-Anima.zip"
-          fi
+          RELEASE_ID=$(gh release view latest --json id -q '.id')
+          gh release edit $RELEASE_ID --title "$VERSION" --body "$CHANGELOG"
