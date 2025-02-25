@@ -1,4 +1,4 @@
-name: Create and Upload ZIP Archive
+name: Create and Upload Release
 
 on:
   push:
@@ -6,33 +6,29 @@ on:
       - main
 
 jobs:
-  create-archive:
+  build:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-    - name: Create ZIP archive
-      run: |
-        zip -r Boot-anima.zip ./*
+      - name: Extract version from module.prop
+        id: get_version
+        run: |
+          VERSION=$(grep '^version=' module.prop | cut -d= -f2)
+          echo "Version: $VERSION"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-    - name: Set up Git
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Create zip archive
+        run: |
+          zip -r Boot-anima.zip .
 
-    - name: Create and push a new tag
-      run: |
-        TAG_NAME="latest"
-        git tag $TAG_NAME
-        git push origin $TAG_NAME
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Upload release assets
-      uses: softprops/action-gh-release@v1
-      with:
-        files: Boot-anima.zip
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload release
+        uses: gh_action_create_release@v1
+        with:
+          tag_name: latest
+          release_name: Boot-Anima $VERSION
+          body: "Release version $VERSION"
+          files: Boot-anima.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
