@@ -1,4 +1,4 @@
-name: Create and Upload Release
+name: Create Release
 
 on:
   push:
@@ -6,29 +6,43 @@ on:
       - main
 
 jobs:
-  build:
+  create-release:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+    # Шаг 1: Checkout репозитория
+    - name: Checkout repository
+      uses: actions/checkout@v2
 
-      - name: Extract version from module.prop
-        id: get_version
-        run: |
-          VERSION=$(grep '^version=' module.prop | cut -d= -f2)
-          echo "Version: $VERSION"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+    # Шаг 2: Устанавливаем необходимые инструменты (zip, jq)
+    - name: Set up tools
+      run: |
+        sudo apt-get install zip jq
 
-      - name: Create zip archive
-        run: |
-          zip -r Boot-anima.zip .
+    # Шаг 3: Читаем версию из файла module.prop
+    - name: Read version from module.prop
+      id: version
+      run: |
+        version=$(grep -oP '^version=\K.+' module.prop)
+        echo "version=$version" >> $GITHUB_ENV
 
-      - name: Upload release
-        uses: gh_action_create_release@v1
-        with:
-          tag_name: latest
-          release_name: Boot-Anima $VERSION
-          body: "Release version $VERSION"
-          files: Boot-anima.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    # Шаг 4: Создание архива, исключая папку .github/workflows
+    - name: Create ZIP archive
+      run: |
+        zip -r Boot-Anima.zip . -x ".github/*"
+
+    # Шаг 5: Получаем GitHub токен для публикации
+    - name: Get the GitHub token
+      id: get_token
+      run: echo "GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+
+    # Шаг 6: Загрузка архива в GitHub Releases
+    - name: Upload ZIP to GitHub Releases
+      uses: ncipollo/release-action@v1
+      with:
+        files: Boot-Anima.zip
+        tag: latest
+        release_name: "Boot-Anima ${VERSION}"
+        body: |
+          Version: ${{ env.version }}
+          Description: Just put [bootanimation.zip] into this script.
