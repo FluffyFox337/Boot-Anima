@@ -170,6 +170,5 @@ else
   ui_print "× Boot animation hasn't been set. "
   ui_print "***********************************"
 fi
-}
 
 exit 0
