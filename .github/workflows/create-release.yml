@@ -1,132 +1,38 @@
-name: Update and Release Workflow
+name: Update Release with Latest Tag
 
 on:
   push:
     branches:
-      - update
-    paths:
-      - 'update.json'
-  workflow_dispatch:
-
-concurrency:
-  group: update-release
-  cancel-in-progress: true
+      - main
+    # Можно добавить фильтрацию по конкретным путям, если нужно обновлять релиз только при изменении конкретных файлов или директорий
+    # paths:
+    #   - '**/*.js'
+    #   - '**/*.py'
 
 jobs:
-  update_module_prop:
+  release:
     runs-on: ubuntu-latest
-    name: Update module.prop
-    if: needs.check_recent_commit.outputs.should_run == 'true'
+
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
+      # Проверка репозитория и установка зависимостей
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/checkout@v4
-        with:
-          ref: update
-          path: update_branch
-
-      - name: Read version from update.json
-        id: read_update_json
+      # Убедимся, что у нас актуальные зависимости и ветка main
+      - name: Set up Git
         run: |
-          VERSION=$(jq -r '.version' update_branch/update.json)
-          VERSION_CODE=$(jq -r '.versionCode' update_branch/update.json)
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+          git fetch --tags
+          git checkout main
 
-      - name: Update module.prop file
+      # Создаём zip архив из репозитория без директории .github
+      - name: Create ZIP archive excluding .github/workflows
         run: |
-          sed -i "s/^version=.*$/version=${{ env.VERSION }}/" module.prop
-          sed -i "s/^versionCode=.*$/versionCode=${{ env.VERSION_CODE }}/" module.prop
+          zip -r release.zip . -x ".github/workflows/*"
 
-      - name: Commit changes to module.prop
-        run: |
-          git add module.prop
-          git commit -m "Update version and versionCode from update.json"
-          git push
-
-  build_and_create_release:
-    runs-on: ubuntu-latest
-    needs: update_module_prop
-    if: needs.check_recent_commit.outputs.should_run == 'true'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-
-      - uses: actions/checkout@v4
-        with:
-          ref: update
-          path: update_branch
-
-      - name: Read version and changelog from update.json and build.md
-        id: read_release_info
-        run: |
-          VERSION=$(jq -r '.version' update_branch/update.json)
-          CHANGELOG=$(cat update_branch/build.md)
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "CHANGELOG=$CHANGELOG" >> $GITHUB_ENV
-
-      - name: Create zip file with repository contents
-        run: |
-          git archive --format zip --output=Boot-Anima.zip HEAD
-          zip -r Boot-Anima.zip . -x "*.github/workflows/*"
-
-      - name: Delete Existing Release
-        id: delete_release
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const tag = "latest";
-      
-            // List all releases and find the release by tag
-            const releases = await github.rest.repos.listReleases({
-              owner: owner,
-              repo: repo,
-            });
-      
-            const release = releases.data.find(release => release.tag_name === tag);
-      
-            // Delete release and tag if found
-            if (release) {
-              await github.rest.repos.deleteRelease({
-                owner: owner,
-                repo: repo,
-                release_id: release.id,
-              });
-              console.log(`Deleted release with ID ${release.id}`);
-            } else {
-              console.log("No existing release to delete");
-            }
-      
-            // Try to delete the tag
-            try {
-              await github.rest.git.deleteRef({
-                owner: owner,
-                repo: repo,
-                ref: `tags/${tag}`,
-              });
-              console.log(`Deleted tag ${tag}`);
-            } catch (error) {
-              console.error(`Error deleting tag: ${error.message}`);
-            }
-
-      - name: Nightly Release
+      # Создаём новый релиз или обновляем существующий с тегом latest
+      - name: Upload release with latest tag
         uses: softprops/action-gh-release@v1
         with:
-          name: Boot-Anima Release [${{ env.VERSION }}]
-          tag_name: latest
-          body: |
-            **This release has been built by Github Actions**
-            [Link to build](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-
-            Build Version: ${{ env.VERSION }}
-
-            Change Log:
-            ${{ env.CHANGELOG }}
           files: Boot-Anima.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
