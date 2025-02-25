@@ -1,1 +1,1 @@
-Boot-Anima: v1.5
+Boot-Anima: v1.0.0
