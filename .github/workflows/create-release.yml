@@ -1,38 +1,63 @@
 name: Update Release with Latest Tag
 
 on:
-  push:
-    branches:
-      - main
-    # Можно добавить фильтрацию по конкретным путям, если нужно обновлять релиз только при изменении конкретных файлов или директорий
-    # paths:
-    #   - '**/*.js'
-    #   - '**/*.py'
+  workflow_dispatch: # Позволяет запускать этот workflow вручную
 
 jobs:
-  release:
+  update-release:
     runs-on: ubuntu-latest
 
     steps:
-      # Проверка репозитория и установка зависимостей
-      - name: Checkout repository
+      # Клонируем репозиторий
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # Убедимся, что у нас актуальные зависимости и ветка main
-      - name: Set up Git
-        run: |
-          git fetch --tags
-          git checkout main
+      # Устанавливаем zip
+      - name: Install zip
+        run: sudo apt-get install -y zip
 
-      # Создаём zip архив из репозитория без директории .github
-      - name: Create ZIP archive excluding .github/workflows
+      # Создаем архив, исключая папку .github/workflows
+      - name: Create Boot-Anima.zip
         run: |
-          zip -r release.zip . -x ".github/workflows/*"
+          zip -r Boot-Anima.zip . -x "*.github/workflows/*"
 
-      # Создаём новый релиз или обновляем существующий с тегом latest
-      - name: Upload release with latest tag
-        uses: softprops/action-gh-release@v1
-        with:
-          files: Boot-Anima.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Получаем токен для доступа к API GitHub
+      - name: Get GitHub token
+        id: token
+        run: echo "::set-output name=token::${{ secrets.GITHUB_TOKEN }}"
+
+      # Получаем список релизов и обновляем существующий с тегом 'latest'
+      - name: Update existing release with 'latest' tag
+        run: |
+          RELEASE_ID=$(curl -s \
+            -H "Authorization: token ${{ steps.token.outputs.token }}" \
+            https://api.github.com/repos/${{ github.repository }}/releases/tags/latest \
+            | jq -r .id)
+
+          if [ "$RELEASE_ID" != "null" ]; then
+            curl -X DELETE \
+              -H "Authorization: token ${{ steps.token.outputs.token }}" \
+              https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID
+          fi
+
+          # Создаем новый релиз с тегом 'latest' и прикрепляем архив
+          curl -X POST \
+            -H "Authorization: token ${{ steps.token.outputs.token }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "tag_name": "latest",
+              "name": "Latest Release",
+              "body": "Updated release with new Boot-Anima.zip.",
+              "draft": false,
+              "prerelease": false
+            }' https://api.github.com/repos/${{ github.repository }}/releases
+
+          # Загружаем архив в релиз
+          curl -X POST \
+            -H "Authorization: token ${{ steps.token.outputs.token }}" \
+            -H "Content-Type: application/zip" \
+            --data-binary @Boot-Anima.zip \
+            "https://uploads.github.com/repos/${{ github.repository }}/releases/$(curl -s \
+              -H 'Authorization: token ${{ steps.token.outputs.token }}' \
+              https://api.github.com/repos/${{ github.repository }}/releases/tags/latest \
+              | jq -r .id)/assets?name=Boot-Anima.zip"
