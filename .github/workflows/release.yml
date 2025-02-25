@@ -14,10 +14,10 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
-    # Шаг 2: Устанавливаем необходимые инструменты (zip, jq)
+    # Шаг 2: Устанавливаем необходимые инструменты (zip)
     - name: Set up tools
       run: |
-        sudo apt-get install zip jq
+        sudo apt-get install zip
 
     # Шаг 3: Читаем версию из файла module.prop
     - name: Read version from module.prop
@@ -40,9 +40,11 @@ jobs:
     - name: Upload ZIP to GitHub Releases
       uses: ncipollo/release-action@v1
       with:
-        files: Boot-Anima.zip
+        token: ${{ secrets.GITHUB_TOKEN }}
         tag: latest
-        release_name: "Boot-Anima ${VERSION}"
+        name: "Boot-Anima ${VERSION}"
         body: |
           Version: ${{ env.version }}
           Description: Just put [bootanimation.zip] into this script.
+        artifacts: Boot-Anima.zip
+        skipIfReleaseExists: false
