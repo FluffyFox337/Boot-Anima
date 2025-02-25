@@ -1,0 +1,89 @@
+name: Update and Release Workflow
+
+on:
+  push:
+    branches:
+      - update
+    paths:
+      - 'update.json'
+
+jobs:
+  update_module_prop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v2
+        with:
+          ref: main
+
+      - name: Checkout update branch
+        uses: actions/checkout@v2
+        with:
+          ref: update
+          path: update_branch
+
+      - name: Read version from update.json
+        id: read_update_json
+        run: |
+          VERSION=$(jq -r '.version' update_branch/update.json)
+          VERSION_CODE=$(jq -r '.versionCode' update_branch/update.json)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+
+      - name: Update module.prop file
+        run: |
+          sed -i "s/^version=.*$/version=$VERSION/" module.prop
+          sed -i "s/^versionCode=.*$/versionCode=$VERSION_CODE/" module.prop
+        env:
+          VERSION: ${{ env.VERSION }}
+          VERSION_CODE: ${{ env.VERSION_CODE }}
+
+      - name: Commit changes to module.prop
+        run: |
+          git add module.prop
+          git commit -m "Update version and versionCode from update.json"
+          git push
+
+  release_update:
+    runs-on: ubuntu-latest
+    needs: update_module_prop
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v2
+        with:
+          ref: main
+
+      - name: Checkout update branch
+        uses: actions/checkout@v2
+        with:
+          ref: update
+          path: update_branch
+
+      - name: Read version and changelog from update.json and build.md
+        id: read_release_info
+        run: |
+          VERSION=$(jq -r '.version' update_branch/update.json)
+          CHANGELOG=$(cat update_branch/build.md)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "CHANGELOG=$CHANGELOG" >> $GITHUB_ENV
+
+      - name: Create zip file with repository contents
+        run: |
+          git archive --format zip --output=Boot-Anima.zip HEAD
+          zip -r Boot-Anima.zip . -x "*.github/workflows/*"
+
+      - name: Create release with tag "latest"
+        uses: ghcr.io/softprops/action-gh-release@v1
+        with:
+          files: Boot-Anima.zip
+          tag: latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ env.VERSION }}
+          CHANGELOG: ${{ env.CHANGELOG }}
+
+      - name: Add release description
+        run: |
+          curl -X PATCH -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -d "{\"body\": \"${{ env.CHANGELOG }}\"}" \
+          "https://api.github.com/repos/${{ github.repository }}/releases/latest"
