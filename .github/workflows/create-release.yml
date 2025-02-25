@@ -1,36 +1,54 @@
-name: Update Release
+#!/bin/bash
 
-on:
-  workflow_dispatch: # Это позволяет запускать workflow вручную
+# Убедитесь, что вы находитесь в корне репозитория
+REPO_DIR=$(pwd)
+TAG="latest"
+ZIP_NAME="Boot-Anima.zip"
 
-jobs:
-  update-release:
-    runs-on: ubuntu-latest
+# Убедитесь, что тег уже существует
+git fetch --tags
+if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+  echo "Ошибка: тег $TAG не найден в репозитории."
+  exit 1
+fi
 
-    steps:
-      - name: Checkout the repository
-        uses: actions/checkout@v4
+# Создание списка файлов для архива
+# Исключаем .git и .github
+EXCLUDE_LIST="--exclude=.git --exclude=.github"
 
-      - name: Create a ZIP archive excluding .github and .git
-        run: |
-          zip -r Boot-Anima.zip . -x ".git/*" ".github/*"
+# Создаем архив
+echo "Создаю архив $ZIP_NAME..."
+zip -r "$ZIP_NAME" . $EXCLUDE_LIST
 
-      - name: Upload the ZIP archive to GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: Boot-Anima.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+# Публикуем релиз на GitHub с уже существующим тегом latest
+echo "Публикую релиз с тегом $TAG..."
 
-      - name: Create or Update Release with 'latest' tag
-        run: |
-          release_id=$(gh release view latest --json id -q ".id" || echo "")
-          if [ -z "$release_id" ]; then
-            echo "Creating new release with tag 'latest'"
-            gh release create latest Boot-Anima.zip --title "Latest Release"
-          else
-            echo "Updating existing release with tag 'latest'"
-            gh release upload latest Boot-Anima.zip
-          fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+# Получите доступ к GitHub API с токеном авторизации (замените YOUR_TOKEN на ваш персональный токен)
+GITHUB_TOKEN="YOUR_TOKEN"
+REPO="user/repo"  # Укажите свой репозиторий, например user/repo
+
+# Создаем новый релиз с тегом "latest"
+RELEASE_RESPONSE=$(curl -s -X POST "https://api.github.com/repos/$REPO/releases" \
+  -H "Authorization: token $GITHUB_TOKEN" \
+  -d @- <<EOF
+{
+  "tag_name": "$TAG",
+  "name": "Release $TAG",
+  "body": "Обновление релиза с тегом $TAG",
+  "draft": false,
+  "prerelease": false
+}
+EOF
+)
+
+# Получаем URL для загрузки
+UPLOAD_URL=$(echo "$RELEASE_RESPONSE" | jq -r .upload_url | sed 's/{?name,label}//')
+
+# Загружаем zip архив в релиз
+echo "Загружаю архив $ZIP_NAME..."
+curl -s -X POST "$UPLOAD_URL" \
+  -H "Authorization: token $GITHUB_TOKEN" \
+  -H "Content-Type: application/zip" \
+  --data-binary @"$ZIP_NAME"
+
+echo "Релиз обновлен успешно."
