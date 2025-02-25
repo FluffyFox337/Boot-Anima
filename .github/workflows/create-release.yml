@@ -1,0 +1,25 @@
+name: Create and Upload ZIP Archive
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  create-archive:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Create ZIP archive
+      run: |
+        zip -r Boot-anima.zip ./*
+
+    - name: Upload release assets
+      uses: softprops/action-gh-release@v1
+      with:
+        files: Boot-anima.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
