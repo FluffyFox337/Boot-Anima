@@ -1,54 +1,88 @@
-#!/bin/bash
+name: Update Release
 
-# Убедитесь, что вы находитесь в корне репозитория
-REPO_DIR=$(pwd)
-TAG="latest"
-ZIP_NAME="Boot-Anima.zip"
+on:
+  workflow_dispatch:
 
-# Убедитесь, что тег уже существует
-git fetch --tags
-if ! git rev-parse "$TAG" >/dev/null 2>&1; then
-  echo "Ошибка: тег $TAG не найден в репозитории."
-  exit 1
-fi
+jobs:
+  update-release:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the repository with both 'main' and 'update' branches
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          ref: main
 
-# Создание списка файлов для архива
-# Исключаем .git и .github
-EXCLUDE_LIST="--exclude=.git --exclude=.github"
+      # Fetch update branch to access 'update.json' and 'build.md'
+      - name: Checkout update branch
+        run: git fetch origin update:refs/remotes/origin/update
 
-# Создаем архив
-echo "Создаю архив $ZIP_NAME..."
-zip -r "$ZIP_NAME" . $EXCLUDE_LIST
+      # Set up the environment for versioning and changelog
+      - name: Set up versioning and changelog
+        id: setup
+        run: |
+          VERSION=$(jq -r .version ./update/update.json)
+          CHANGELOG=$(curl -s https://raw.githubusercontent.com/FluffyFox337/Boot-Anima/refs/heads/update/build.md)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "CHANGELOG=$CHANGELOG" >> $GITHUB_ENV
 
-# Публикуем релиз на GitHub с уже существующим тегом latest
-echo "Публикую релиз с тегом $TAG..."
+      # Create a ZIP archive excluding .github and .git
+      - name: Create ZIP Archive
+        run: |
+          mkdir -p archive
+          rsync -av --exclude='.github' --exclude='.git' ./ archive/
+          zip -r Boot-Anima.zip archive/*
 
-# Получите доступ к GitHub API с токеном авторизации (замените YOUR_TOKEN на ваш персональный токен)
-GITHUB_TOKEN="YOUR_TOKEN"
-REPO="user/repo"  # Укажите свой репозиторий, например user/repo
+      # Upload the ZIP file as an artifact
+      - name: Upload ZIP Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: Boot-Anima.zip
+          path: Boot-Anima.zip
 
-# Создаем новый релиз с тегом "latest"
-RELEASE_RESPONSE=$(curl -s -X POST "https://api.github.com/repos/$REPO/releases" \
-  -H "Authorization: token $GITHUB_TOKEN" \
-  -d @- <<EOF
-{
-  "tag_name": "$TAG",
-  "name": "Release $TAG",
-  "body": "Обновление релиза с тегом $TAG",
-  "draft": false,
-  "prerelease": false
-}
-EOF
-)
+      # Create/Update the release with tag "latest"
+      - name: Create or Update Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_TAG="latest"
+          RELEASE_NAME="${{ env.VERSION }}"
+          RELEASE_BODY="${{ env.CHANGELOG }}"
 
-# Получаем URL для загрузки
-UPLOAD_URL=$(echo "$RELEASE_RESPONSE" | jq -r .upload_url | sed 's/{?name,label}//')
+          # Check if the release already exists
+          RELEASE_ID=$(curl -s \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/FluffyFox337/Boot-Anima/releases/tags/$RELEASE_TAG" | jq -r .id)
 
-# Загружаем zip архив в релиз
-echo "Загружаю архив $ZIP_NAME..."
-curl -s -X POST "$UPLOAD_URL" \
-  -H "Authorization: token $GITHUB_TOKEN" \
-  -H "Content-Type: application/zip" \
-  --data-binary @"$ZIP_NAME"
+          # If release exists, update it
+          if [ "$RELEASE_ID" != "null" ]; then
+            echo "Updating existing release with tag 'latest'"
+            curl -X PATCH \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -d "{\"name\":\"$RELEASE_NAME\", \"body\":\"$RELEASE_BODY\", \"tag_name\":\"$RELEASE_TAG\", \"draft\":false, \"prerelease\":false}" \
+              "https://api.github.com/repos/FluffyFox337/Boot-Anima/releases/$RELEASE_ID"
 
-echo "Релиз обновлен успешно."
+            # Upload new asset to the release
+            curl -X POST \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Content-Type: application/zip" \
+              --data-binary @Boot-Anima.zip \
+              "https://uploads.github.com/repos/FluffyFox337/Boot-Anima/releases/$RELEASE_ID/assets?name=Boot-Anima.zip"
+          else
+            # If release does not exist, create a new one
+            echo "Creating new release with tag 'latest'"
+            RESPONSE=$(curl -X POST \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -d "{\"tag_name\":\"$RELEASE_TAG\", \"name\":\"$RELEASE_NAME\", \"body\":\"$RELEASE_BODY\", \"draft\":false, \"prerelease\":false}" \
+              "https://api.github.com/repos/FluffyFox337/Boot-Anima/releases")
+
+            # Extract release ID from response
+            RELEASE_ID=$(echo $RESPONSE | jq -r .id)
+
+            # Upload asset to the newly created release
+            curl -X POST \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Content-Type: application/zip" \
+              --data-binary @Boot-Anima.zip \
+              "https://uploads.github.com/repos/FluffyFox337/Boot-Anima/releases/$RELEASE_ID/assets?name=Boot-Anima.zip"
+          fi
