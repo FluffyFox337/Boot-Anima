@@ -1,7 +1,7 @@
 id=bootanimation-editor
 name=Boot-Anima
 version=1.0.0
-versionCode=100
+versionCode=1000
 author=NickyFox
 description=Just put [bootanimation.zip] into this script.
 updateJson=https://github.com/FluffyFox337/Boot-Anima/raw/refs/heads/update/update.json
