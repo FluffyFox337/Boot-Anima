@@ -2,7 +2,7 @@ name: Update Release with Latest Tag
 
 on:
    push:
-        branches: [ main , update ]
+        branches: [update]
 
 jobs:
   update-release:
