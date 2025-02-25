@@ -67,10 +67,15 @@ jobs:
         )
         release_url=$(echo "$response" | jq -r '.upload_url' | sed -e "s/{?name,label}//")
 
-    # Шаг 9: Загрузка архива в новый релиз
-    - name: Upload ZIP to the new release
-      run: |
-        curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          -H "Content-Type: application/zip" \
-          --data-binary @Boot-Anima.zip \
-          "$release_url?name=Boot-Anima.zip"
+# Шаг 9: Загрузка архива в новый релиз
+- name: Upload ZIP to the new release
+  run: |
+    # Получаем URL для загрузки из ответа API
+    upload_url=$(echo "$response" | jq -r '.upload_url' | sed 's/{?name,label}//')
+
+    # Загружаем файл на GitHub Release
+    curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+      -H "Content-Type: application/zip" \
+      --data-binary @Boot-Anima.zip \
+      "$upload_url?name=Boot-Anima.zip"
+
