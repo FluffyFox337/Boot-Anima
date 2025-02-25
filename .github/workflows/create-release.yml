@@ -17,6 +17,12 @@ jobs:
       run: |
         zip -r Boot-anima.zip ./*
 
+    - name: Create a new tag
+      run: |
+        TAG_NAME="latest"
+        git tag $TAG_NAME
+        git push origin $TAG_NAME
+
     - name: Upload release assets
       uses: softprops/action-gh-release@v1
       with:
